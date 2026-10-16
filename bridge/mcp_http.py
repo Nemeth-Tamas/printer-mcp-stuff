@@ -1,6 +1,6 @@
 """Network-accessible Streamable HTTP MCP server for Echo.
 
-Runs as an independent ASGI service on TCP 8766.
+Runs as an independent ASGI service on TCP 9006.
 Authorization is checked before MCP requests reach the server.
 """
 import os
@@ -25,8 +25,8 @@ mcp = FastMCP(
     streamable_http_path="/",
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=["localhost:*", "127.0.0.1:*", "10.10.10.12:8766"],
-        allowed_origins=["http://localhost:*", "http://127.0.0.1:*", "http://10.10.10.12:8766"],
+        allowed_hosts=["localhost:*", "127.0.0.1:*", "10.10.10.12:9006"],
+        allowed_origins=["http://localhost:*", "http://127.0.0.1:*", "http://10.10.10.12:9006"],
     ),
 )
 
