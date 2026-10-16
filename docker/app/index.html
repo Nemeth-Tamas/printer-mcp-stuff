@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="hu"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cellnet Booking</title>
+<style>
+:root{font-family:system-ui,Segoe UI,sans-serif;color-scheme:dark;background:#101827;color:#eaf1ff}
+body{max-width:1050px;margin:32px auto;padding:0 16px}h1{letter-spacing:-.05em}
+main{display:grid;grid-template-columns:350px 1fr;gap:24px}@media(max-width:780px){main{grid-template-columns:1fr}}
+section{background:#1b2940;padding:22px;border-radius:16px}label{display:block;margin:12px 0 4px}
+input,select,textarea{width:100%;box-sizing:border-box;padding:11px;border:1px solid #465978;border-radius:8px;background:#0f1b2e;color:white}
+button{background:#4788f9;border:0;color:white;border-radius:8px;padding:11px 14px;cursor:pointer;margin:5px 5px 5px 0}
+button:disabled{opacity:.5}.danger{background:#a43c46}.ghost{background:#344966}
+article{border-bottom:1px solid #43516c;padding:12px 0}small{color:#b8c9df}#notice{min-height:2em}
+</style></head>
+<body><h1>Cellnet Booking</h1><p>Időpontfoglalás és nyomtatás — helyi adminfelület</p>
+<label>Admin API token <input type="password" id="token" placeholder="BOOKING_ADMIN_TOKEN" autocomplete="off"></label>
+<main><section><h2>Új időpont</h2><form id="form">
+<label>Ügyfél neve <input name="customer" required maxlength="120"></label>
+<label>Telefonszám <input name="phone" required maxlength="40"></label>
+<label>Szolgáltatás <select name="service"><option>Bevizsgálás</option><option>Telefonjavítás</option><option>Laptop / PC szerviz</option><option>Konzultáció</option><option>Helyszíni kiszállás</option></select></label>
+<label>Időpont <input name="starts_at" type="datetime-local" required></label>
+<label>Időtartam (perc) <input name="duration_minutes" type="number" value="60" min="15" max="480"></label>
+<label>Megjegyzés <textarea name="notes" rows="3" maxlength="1500"></textarea></label>
+<button type="submit">Időpont mentése</button></form></section>
+<section><h2>Időpontok</h2><button class="ghost" id="refresh">Frissítés</button><div id="notice" role="status"></div><div id="appointments"></div></section></main>
+<script>
+const $=id=>document.getElementById(id);
+async function api(path,method='GET',body){
+ const res=await fetch(path,{method,headers:{'Authorization':'Bearer '+$('token').value,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ if(!res.ok)throw Error('HTTP '+res.status+' — '+(await res.text()).slice(0,130));
+ return res.json();
+}
+function message(s){$('notice').textContent=s}
+async function refresh(){
+ try{const rows=await api('/api/appointments');const out=$('appointments');out.replaceChildren();
+ for(const r of rows){
+ const a=document.createElement('article');const h=document.createElement('strong');h.textContent=r.customer+' — '+r.service;
+ const p=document.createElement('p');p.textContent=new Date(r.starts_at).toLocaleString('hu-HU',{timeZone:'Europe/Budapest'})+' · '+r.phone+' · '+r.status;
+ const detail=document.createElement('small');detail.textContent=r.notes;
+ const print=document.createElement('button');print.textContent='Nyomtatás';print.onclick=()=>api('/api/appointments/'+r.id+'/print','POST').then(()=>message('Nyomtatás sorba állítva')).catch(e=>message(e.message));
+ const cancel=document.createElement('button');cancel.textContent='Lemondás';cancel.className='danger';cancel.disabled=r.status==='cancelled';
+ cancel.onclick=()=>api('/api/appointments/'+r.id+'/cancel','PATCH').then(refresh).catch(e=>message(e.message));
+ a.append(h,p,detail,document.createElement('br'),print,cancel);out.append(a);
+ }}catch(e){message(e.message)}
+}
+$('refresh').onclick=refresh;
+$('form').onsubmit=async e=>{
+ e.preventDefault();const f=new FormData(e.target);const raw=f.get('starts_at');
+ const d=new Date(raw);if(isNaN(d)){message('Érvénytelen időpont');return}
+ const body={customer:f.get('customer'),phone:f.get('phone'),service:f.get('service'),starts_at:d.toISOString(),duration_minutes:Number(f.get('duration_minutes')),notes:f.get('notes')};
+ try{await api('/api/appointments','POST',body);e.target.reset();message('Időpont mentve');refresh()}catch(err){message(err.message)}
+};
+</script></body></html>
