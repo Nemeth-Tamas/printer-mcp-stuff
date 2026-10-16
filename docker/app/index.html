@@ -2,17 +2,28 @@
 <html lang="hu"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cellnet Booking</title>
 <style>
-:root{font-family:system-ui,Segoe UI,sans-serif;color-scheme:dark;background:#101827;color:#eaf1ff}
-body{max-width:1050px;margin:32px auto;padding:0 16px}h1{letter-spacing:-.05em}
-main{display:grid;grid-template-columns:350px 1fr;gap:24px}@media(max-width:780px){main{grid-template-columns:1fr}}
-section{background:#1b2940;padding:22px;border-radius:16px}label{display:block;margin:12px 0 4px}
-input,select,textarea{width:100%;box-sizing:border-box;padding:11px;border:1px solid #465978;border-radius:8px;background:#0f1b2e;color:white}
-button{background:#4788f9;border:0;color:white;border-radius:8px;padding:11px 14px;cursor:pointer;margin:5px 5px 5px 0}
-button:disabled{opacity:.5}.danger{background:#a43c46}.ghost{background:#344966}
-article{border-bottom:1px solid #43516c;padding:12px 0}small{color:#b8c9df}#notice{min-height:2em}
+:root{font-family:Inter,Segoe UI,system-ui,sans-serif;color-scheme:dark;background:#0b1220;color:#f0f5ff}
+*{box-sizing:border-box}body{max-width:1250px;margin:0 auto;padding:32px 26px}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:28px}
+.eyebrow{font-size:12px;letter-spacing:.16em;font-weight:700;color:#8da9c9}
+h1{font-size:clamp(30px,4vw,42px);letter-spacing:-.05em;margin:6px 0}
+h2{font-size:19px;letter-spacing:-.02em;margin:0 0 22px}
+p{color:#a0b3ce}a{color:#b1cfff;text-decoration:none;border:1px solid #364a68;background:#1c2e48;border-radius:10px;padding:11px 15px}
+main{display:grid;grid-template-columns:minmax(340px,420px) minmax(0,1fr);gap:20px}
+section{border:1px solid #2c3e58;background:#17253a;border-radius:18px;padding:25px;min-height:440px}
+label{display:block;margin:16px 0 6px;color:#c1d0e5;font-size:13px;font-weight:600}
+input,select,textarea{display:block;width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid #3e5371;border-radius:10px;background:#101d31;color:#f0f5ff;font:inherit;font-size:14px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:#73a5ff;box-shadow:0 0 0 3px #73a5ff28}
+button{background:#4b87ec;border:0;color:#fff;border-radius:10px;padding:12px 16px;cursor:pointer;font:inherit;font-size:13px;font-weight:650;margin:8px 7px 4px 0}
+button:hover{filter:brightness(1.1)}button:disabled{opacity:.5}
+.danger{background:#8e3445}.ghost{background:#293d5a}
+article{background:#1d3049;border:1px solid #324765;border-radius:12px;padding:16px;margin:12px 0}
+article strong{font-size:15px}article p{margin:9px 0;color:#afbfda;font-size:13px}small{color:#91a6c5;display:block;white-space:pre-wrap}
+#notice{min-height:28px;color:#8fdaae;font-size:13px}
+@media(max-width:850px){main{grid-template-columns:1fr}body{padding:18px}}
 </style></head>
-<body><h1>Cellnet Booking</h1><a href='/calendar'>Heti naptár →</a><p>Időpontfoglalás és nyomtatás — helyi adminfelület</p>
-<main><section><h2>Új időpont</h2><form id="form">
+<body><header><div><div class="eyebrow">CELLNET / ÜGYFÉLKEZELÉS</div><h1>Időpontfoglalás</h1><p>Egyszerű foglalás, Google Calendar szinkron és nyomtatás.</p></div><a href="/calendar">Heti naptár →</a></header>
+<main><section><h2>Új foglalás</h2><form id="form">
 <label>Ügyfél neve <input name="customer" required maxlength="120"></label>
 <label>Telefonszám <input name="phone" required maxlength="40"></label>
 <label>Szolgáltatás <select name="service"><option>Bevizsgálás</option><option>Telefonjavítás</option><option>Laptop / PC szerviz</option><option>Konzultáció</option><option>Helyszíni kiszállás</option></select></label>
@@ -20,7 +31,7 @@ article{border-bottom:1px solid #43516c;padding:12px 0}small{color:#b8c9df}#noti
 <label>Időtartam (perc) <input name="duration_minutes" type="number" value="60" min="15" max="480"></label>
 <label>Megjegyzés <textarea name="notes" rows="3" maxlength="1500"></textarea></label>
 <button type="submit">Időpont mentése</button></form></section>
-<section><h2>Időpontok</h2><button class="ghost" id="refresh">Frissítés</button><div id="notice" role="status"></div><div id="appointments"></div></section></main>
+<section><h2>Legutóbbi foglalások</h2><button class="ghost" id="refresh">Frissítés</button><div id="notice" role="status"></div><div id="appointments"></div></section></main>
 <script>
 const $=id=>document.getElementById(id);const slot=new URLSearchParams(location.search).get('slot');if(slot)document.querySelector('[name=starts_at]').value=slot;
 async function api(path,method='GET',body){
@@ -46,6 +57,6 @@ $('form').onsubmit=async e=>{
  e.preventDefault();const f=new FormData(e.target);const raw=f.get('starts_at');
  const d=new Date(raw);if(isNaN(d)){message('Érvénytelen időpont');return}
  const body={customer:f.get('customer'),phone:f.get('phone'),service:f.get('service'),starts_at:d.toISOString(),duration_minutes:Number(f.get('duration_minutes')),notes:f.get('notes')};
- try{await api('/api/appointments','POST',body);e.target.reset();message('Időpont mentve');refresh()}catch(err){message(err.message)}
+ try{await api('/api/appointments','POST',body);e.target.reset();message('Foglalás mentve a Google Calendarba is.');refresh()}catch(err){message(err.message)}
 };
 </script></body></html>
