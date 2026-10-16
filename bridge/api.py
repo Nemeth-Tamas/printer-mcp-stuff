@@ -1,13 +1,26 @@
 """Authenticated local/LAN API for the Windows receipt printer."""
 import os
 import secrets
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel, Field
 from .printer import print_text, print_qr, print_appointment, print_custom, list_printers
 from .tickets import daily_schedule, reminder
 from .history import recent
 
-app = FastAPI(title="Echo Birch Print Bridge", version="0.4.0")
+app = FastAPI(title="Echo Birch Print Bridge", version="0.4.1")
+LOG_PATH = Path(__file__).resolve().parent.parent / "printer-errors.log"
+logger = logging.getLogger("birch.printer")
+if not logger.handlers:
+    try:
+        handler = RotatingFileHandler(LOG_PATH, maxBytes=500_000, backupCount=2, encoding="utf-8")
+    except OSError:
+        handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 def authorize(authorization: str | None = Header(default=None)):
     token = os.getenv("PRINT_API_TOKEN")
@@ -47,7 +60,8 @@ def submit(fn, *args, **kwargs):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(503, "Printer spooler unavailable or print operation failed") from exc
+        logger.exception("Print submission failed: %s", type(exc).__name__)
+        raise HTTPException(503, f"Printer failure: {type(exc).__name__}; see printer-errors.log on Windows") from exc
 
 @app.get("/health")
 def health():
@@ -116,3 +130,21 @@ class CustomRequest(BaseModel):
 @app.post("/print/custom", dependencies=[Depends(authorize)])
 def custom_receipt(req: CustomRequest):
     return submit(print_custom, req.blocks, cut=req.cut, beep=req.beep, urgent=req.urgent)
+
+@app.get("/diagnostics/printer", dependencies=[Depends(authorize)])
+def printer_diagnostics():
+    """Read-only spooler diagnostics; returns no tokens or private print contents."""
+    import win32print
+    name = os.getenv("PRINTER_NAME", "")
+    try:
+        handle = win32print.OpenPrinter(name)
+        try:
+            details = win32print.GetPrinter(handle, 2)
+            return {"selected": name, "accessible": True,
+                    "port": details.get("pPortName"), "driver": details.get("pDriverName"),
+                    "status": details.get("Status"), "service_account": os.getenv("USERNAME", "unknown")}
+        finally:
+            win32print.ClosePrinter(handle)
+    except Exception as exc:
+        logger.exception("Spooler diagnostic failed")
+        raise HTTPException(503, f"Cannot open printer as service: {type(exc).__name__}; see printer-errors.log") from exc
