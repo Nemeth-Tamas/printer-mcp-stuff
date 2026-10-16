@@ -118,6 +118,11 @@ def print_image(image, cut=True, beep=False):
                 win32print.EndPagePrinter(handle)
             finally:
                 win32print.EndDocPrinter(handle)
+            try:
+                from .history import record
+                record(job, name)
+            except Exception:
+                pass  # Printing must not fail because the optional history log failed.
             return job
         finally:
             win32print.ClosePrinter(handle)
