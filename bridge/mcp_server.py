@@ -1,4 +1,4 @@
-"""MCP stdio adapter for Echo. Calls the authenticated HTTP print API."""
+"""MCP stdio adapter for Echo (can run on any machine with Python)."""
 import os
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -15,12 +15,25 @@ def request(method: str, path: str, **kwargs):
 
 @mcp.tool()
 def print_receipt(text: str, cut: bool = True, beep: bool = False) -> dict:
-    """Print text with Hungarian Unicode on the configured receipt printer."""
+    """Print a Unicode receipt including Hungarian accents."""
     return request("POST", "/print/text", json={"text": text, "cut": cut, "beep": beep})
 
 @mcp.tool()
+def print_qr_code(data: str, caption: str = "", cut: bool = True, beep: bool = False) -> dict:
+    """Print a QR code with optional caption."""
+    return request("POST", "/print/qr", json={"data": data, "caption": caption, "cut": cut, "beep": beep})
+
+@mcp.tool()
+def print_appointment(customer: str, starts_at: str, service: str, notes: str = "",
+                      reference: str = "", cut: bool = True, beep: bool = True) -> dict:
+    """Print a Cellnet customer appointment ticket."""
+    return request("POST", "/print/appointment", json={
+        "customer": customer, "starts_at": starts_at, "service": service,
+        "notes": notes, "reference": reference, "cut": cut, "beep": beep})
+
+@mcp.tool()
 def available_printers() -> dict:
-    """List Windows printers and the selected default bridge printer."""
+    """List Windows printers and selected receipt printer."""
     return request("GET", "/printers")
 
 if __name__ == "__main__":
