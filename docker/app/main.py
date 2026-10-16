@@ -1,6 +1,5 @@
-"""Cellnet Booking MVP: authenticated bookings, simple frontend and printer integration."""
+"""Cellnet Booking MVP: trusted LAN-only bookings and print integration."""
 import os
-import secrets
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -8,14 +7,14 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent
 DB = Path(os.getenv("BOOKING_DB", "/data/booking.sqlite3"))
 TZ = ZoneInfo("Europe/Budapest")
-app = FastAPI(title="Cellnet Booking", version="0.1.0")
+app = FastAPI(title="Cellnet Booking", version="0.2.0")
 
 @contextmanager
 def database():
@@ -34,13 +33,6 @@ def database():
     finally:
         conn.close()
 
-def require_auth(authorization: str | None = Header(default=None)):
-    token = os.getenv("BOOKING_ADMIN_TOKEN", "")
-    if not token or token == "GENERATE_A_LONG_RANDOM_PASSWORD":
-        raise HTTPException(503, "Configure BOOKING_ADMIN_TOKEN")
-    if not authorization or not authorization.startswith("Bearer ") or not secrets.compare_digest(authorization[7:], token):
-        raise HTTPException(401, "Unauthorized")
-
 class AppointmentIn(BaseModel):
     customer: str = Field(min_length=1, max_length=120)
     phone: str = Field(min_length=3, max_length=40)
@@ -56,18 +48,18 @@ def validate_time(value: datetime):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "0.1.0"}
+    return {"ok": True, "version": "0.2.0"}
 
 @app.get("/", response_class=HTMLResponse)
 def home():
     return (ROOT / "index.html").read_text(encoding="utf-8")
 
-@app.get("/api/appointments", dependencies=[Depends(require_auth)])
+@app.get("/api/appointments")
 def list_appointments():
     with database() as db:
         return [dict(row) for row in db.execute("SELECT * FROM appointments ORDER BY starts_at DESC LIMIT 250")]
 
-@app.post("/api/appointments", dependencies=[Depends(require_auth)], status_code=201)
+@app.post("/api/appointments", status_code=201)
 def create_appointment(req: AppointmentIn):
     when = validate_time(req.starts_at)
     with database() as db:
@@ -76,7 +68,7 @@ def create_appointment(req: AppointmentIn):
           (req.customer, req.phone, req.service, when, req.duration_minutes, req.notes, datetime.now(TZ).isoformat()))
         return {"id": cursor.lastrowid, "status": "booked", "starts_at": when}
 
-@app.patch("/api/appointments/{appointment_id}/cancel", dependencies=[Depends(require_auth)])
+@app.patch("/api/appointments/{appointment_id}/cancel")
 def cancel_appointment(appointment_id: int):
     with database() as db:
         cur = db.execute("UPDATE appointments SET status='cancelled' WHERE id=? AND status='booked'", (appointment_id,))
@@ -84,7 +76,7 @@ def cancel_appointment(appointment_id: int):
             raise HTTPException(404, "Active appointment not found")
         return {"ok": True}
 
-@app.post("/api/appointments/{appointment_id}/print", dependencies=[Depends(require_auth)])
+@app.post("/api/appointments/{appointment_id}/print")
 def print_appointment(appointment_id: int):
     with database() as db:
         row = db.execute("SELECT * FROM appointments WHERE id=?", (appointment_id,)).fetchone()
