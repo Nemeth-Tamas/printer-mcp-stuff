@@ -46,12 +46,13 @@ async function refresh(){
  const a=document.createElement('article');const h=document.createElement('strong');h.textContent=r.customer+' — '+r.service;
  const p=document.createElement('p');p.textContent=new Date(r.starts_at).toLocaleString('hu-HU',{timeZone:'Europe/Budapest'})+' · '+r.phone+' · '+r.status;
  const detail=document.createElement('small');detail.textContent=r.notes;
- const print=document.createElement('button');print.textContent='Nyomtatás';print.onclick=()=>api('/api/appointments/'+r.id+'/print','POST').then(()=>message('Nyomtatás sorba állítva')).catch(e=>message(e.message));
+ const print=document.createElement('button');print.textContent='Ügyfél példány';print.onclick=()=>api('/api/appointments/'+r.id+'/print?mode=customer','POST').then(()=>message('Ügyfél példány sorba állítva')).catch(e=>message(e.message));
+ const tech=document.createElement('button');tech.textContent='Technikus példány';tech.className='ghost';tech.onclick=()=>api('/api/appointments/'+r.id+'/print?mode=technician','POST').then(()=>message('Technikus példány sorba állítva')).catch(e=>message(e.message));
  const edit=document.createElement('button');edit.textContent='Szerkesztés';edit.className='ghost';edit.disabled=r.status==='cancelled'||!r.google_event_id;
  edit.onclick=()=>{editing=r.id;const form=$('form');for(const name of ['customer','phone','service','notes','duration_minutes'])form.elements[name].value=r[name];const d=new Date(r.starts_at);const two=n=>String(n).padStart(2,'0');form.elements.starts_at.value=d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())+'T'+two(d.getHours())+':'+two(d.getMinutes());$('formtitle').textContent='Foglalás szerkesztése #'+r.id;$('save').textContent='Változások mentése';$('clear').hidden=false;form.scrollIntoView({behavior:'smooth'});};
  const cancel=document.createElement('button');cancel.textContent='Lemondás';cancel.className='danger';cancel.disabled=r.status==='cancelled';
  cancel.onclick=()=>api('/api/appointments/'+r.id+'/cancel','PATCH').then(refresh).catch(e=>message(e.message));
- a.append(h,p,detail,document.createElement('br'),edit,print,cancel);out.append(a);
+ a.append(h,p,detail,document.createElement('br'),edit,print,tech,cancel);out.append(a);
  }}catch(e){message(e.message)}
 }
 $('refresh').onclick=refresh;
