@@ -273,8 +273,8 @@ def printer_status():
     try:
         with httpx.Client(timeout=5) as client:
             health_response = client.get(url + "/health")
-            printer_response = client.get(url + "/printers", headers={"Authorization": "Bearer " + token})
+            printer_response = client.get(url + "/diagnostics/printer", headers={"Authorization": "Bearer " + token})
             return {"health_http": health_response.status_code, "printer_http": printer_response.status_code,
-                    "printers": printer_response.json() if printer_response.is_success else printer_response.text[:180]}
+                    "diagnostics": printer_response.json() if printer_response.is_success else printer_response.text[:180]}
     except httpx.RequestError as exc:
         raise HTTPException(502, f"Printer unreachable ({type(exc).__name__}): {str(exc)[:140]}") from None
