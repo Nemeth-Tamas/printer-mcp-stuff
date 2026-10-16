@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse
 
 from .tickets import daily_schedule, reminder
 from .history import recent
-from .printer import list_printers, print_appointment as do_appointment, print_qr as do_qr, print_text as do_text
+from .printer import list_printers, print_appointment as do_appointment, print_qr as do_qr, print_text as do_text, print_custom as do_custom
 
 mcp = FastMCP(
     "echo-birch-printer",
@@ -43,10 +43,10 @@ def print_qr_code(data: str, caption: str = "", cut: bool = True, beep: bool = F
 @mcp.tool()
 def print_appointment(customer: str, starts_at: str, service: str,
                       notes: str = "", reference: str = "",
-                      cut: bool = True, beep: bool = True) -> dict:
+                      cut: bool = True, beep: bool = True, mode: str = "customer", phone: str = "") -> dict:
     """Queue a Cellnet appointment ticket with customer, date/time and service."""
     return {"status": "queued", "job_id": do_appointment(
-        customer, starts_at, service, notes, reference, cut, beep
+        customer, starts_at, service, notes, reference, cut, beep, mode, phone
     )}
 
 @mcp.tool()
@@ -84,6 +84,11 @@ def print_reminder(title: str, message: str, when: str = "", priority: str = "no
 def recent_print_jobs(limit: int = 20) -> dict:
     """List recently queued Windows print jobs (IDs/timestamps only; no private ticket contents)."""
     return {"jobs": recent(limit)}
+
+@mcp.tool()
+def print_custom_receipt(blocks: list[dict], cut: bool = True, beep: bool = False, urgent: bool = False) -> dict:
+    """Freely compose a thermal receipt. Blocks: {"type":"text","text":"..."}, {"type":"heading","text":"..."}, {"type":"divider"}, {"type":"qr","data":"...","size":5}. Hungarian Unicode, cutter and beeper are supported."""
+    return {"status": "queued", "job_id": do_custom(blocks, cut=cut, beep=beep, urgent=urgent)}
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
