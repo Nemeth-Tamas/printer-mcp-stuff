@@ -149,21 +149,37 @@ def print_qr(data, caption="", size=5, cut=True, beep=False):
     images.append(render_qr(data, size))
     return print_image(stack_images(images), cut, beep)
 
+def format_appointment_date(value):
+    """Format ISO timestamps in Europe/Budapest; preserve other user-supplied dates."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(ZoneInfo("Europe/Budapest"))
+        return parsed.strftime("%Y. %m. %d.  %H:%M")
+    except (TypeError, ValueError):
+        return str(value)
+
 def print_appointment(customer, starts_at, service, notes="", reference="", cut=True, beep=True, mode="customer", phone=""):
     if mode not in ("customer", "technician"):
         raise ValueError("mode must be customer or technician")
+    date_text = format_appointment_date(starts_at)
     lines = ["CELLNET KFT.", "IDŐPONTFOGLALÁS", "--------------------------",
-             f"Időpont: {starts_at}", f"Szolgáltatás: {service}"]
+             f"Dátum és idő: {date_text}", f"Szolgáltatás: {service}",
+             f"Ügyfél: {customer}"]
     if reference:
         lines.append(f"Azonosító: {reference}")
     if mode == "technician":
-        lines.extend([f"Ügyfél: {customer}", f"Telefon: {phone or '-'}"])
+        lines.extend([f"Telefon: {phone or '-'}"])
         if notes:
             lines.extend(["--------------------------", f"Belső megjegyzés: {notes}"])
-        lines.append("TECHNIKUS PÉLDÁNY")
+        lines.extend(["--------------------------", "TECHNIKUS PÉLDÁNY"])
     else:
-        lines.extend([f"Ügyfél: {customer}", "--------------------------", "ÜGYFÉL PÉLDÁNY"])
-    return print_text("\n".join(lines), cut, beep)
+        lines.extend(["--------------------------", "Köszönjük a foglalását!",
+                      "Várjuk szeretettel!", "--------------------------",
+                      "ÜGYFÉL PÉLDÁNY"])
+    return print_text("\\n".join(lines), cut, beep)
 
 def print_custom(blocks, cut=True, beep=False, urgent=False):
     """Structured, printable Unicode blocks; no caller-supplied ESC/POS bytes."""
