@@ -1,5 +1,6 @@
 """Fetch shared Google Calendar events using a service account."""
 import os
+from urllib.parse import quote
 import httpx
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request
@@ -22,7 +23,7 @@ def fetch_events(start, end):
                 if next_page:
                     params["pageToken"] = next_page
                 response = client.get(
-                    "https://www.googleapis.com/calendar/v3/calendars/" + httpx.URL(calendar_id).raw_path.decode().replace("@", "%40") + "/events",
+                    "https://www.googleapis.com/calendar/v3/calendars/" + quote(calendar_id, safe="") + "/events",
                     params=params, headers={"Authorization": "Bearer " + credentials.token})
                 response.raise_for_status()
                 data = response.json()
