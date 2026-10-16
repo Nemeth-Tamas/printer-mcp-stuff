@@ -20,6 +20,7 @@ class PrintRequest(BaseModel):
     text: str = Field(min_length=1, max_length=12000)
     cut: bool = True
     beep: bool = False
+    urgent: bool = False
 
 class QRRequest(BaseModel):
     data: str = Field(min_length=1, max_length=1500)
@@ -59,7 +60,7 @@ def printers():
 
 @app.post("/print/text", dependencies=[Depends(authorize)])
 def print_receipt(req: PrintRequest):
-    return submit(print_text, req.text, cut=req.cut, beep=req.beep)
+    return submit(print_text, req.text, cut=req.cut, beep=req.beep, urgent=req.urgent)
 
 @app.post("/print/qr", dependencies=[Depends(authorize)])
 def print_qrcode(req: QRRequest):
@@ -98,7 +99,7 @@ def schedule_receipt(req: ScheduleRequest):
 @app.post("/print/reminder", dependencies=[Depends(authorize)])
 def reminder_receipt(req: ReminderRequest):
     text = reminder(req.title, req.message, req.when, req.priority)
-    return submit(print_text, text, cut=req.cut, beep=req.beep)
+    return submit(print_text, text, cut=req.cut, beep=req.beep, urgent=req.priority == "urgent")
 
 @app.get("/jobs", dependencies=[Depends(authorize)])
 def jobs(limit: int = 20):
