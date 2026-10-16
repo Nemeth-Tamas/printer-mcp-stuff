@@ -1,11 +1,71 @@
-<!doctype html>
-<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cellnet naptár</title>
-<style>body{font-family:system-ui;background:#101827;color:#eaf1ff;max-width:1200px;margin:25px auto;padding:10px}a{color:#99c5ff}button{cursor:pointer;background:#315c98;color:white;padding:8px;border:0;border-radius:7px}.toolbar{display:flex;gap:15px;align-items:center}.week{display:grid;grid-template-columns:repeat(7,minmax(155px,1fr));gap:8px;overflow:auto}.day{background:#1b2b42;border-radius:10px;padding:12px;min-height:370px}.event{background:#244a60;padding:8px;margin:8px 0;border-left:3px solid #72d8ac;border-radius:5px;font-size:13px}.slot{display:block;margin:8px 0;background:#273950;font-size:12px;width:100%;text-align:left}@media(max-width:1100px){.week{grid-template-columns:repeat(7,170px)}}</style>
-</head><body><h1>Cellnet – heti naptár</h1><a href="/">← Időpontfoglalás</a><div class="toolbar"><button id="back">← Előző</button><strong id="heading"></strong><button id="forward">Következő →</button><button id="today">Ma</button></div><p id="status"></p><div class="week" id="week"></div>
+<!doctype html><html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cellnet • Naptár</title>
+<style>
+:root{font-family:Inter,Segoe UI,system-ui,sans-serif;color-scheme:dark;background:#0b1220;color:#edf4ff}
+*{box-sizing:border-box}body{max-width:1480px;margin:auto;padding:30px 28px}a{color:#92bcff;text-decoration:none}
+header{display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:28px}
+.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#7d9cbd;font-weight:700}
+h1{font-size:clamp(28px,4vw,38px);letter-spacing:-.05em;margin:6px 0}p{color:#9cacc5}
+button{cursor:pointer;border:1px solid #354a65;border-radius:10px;background:#1c2c43;color:#e9f2ff;padding:10px 13px;font:inherit}
+button:hover{background:#2c4161}button:disabled{cursor:default;opacity:.35}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.weeklabel{font-size:15px;font-weight:650;padding:0 12px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:13px;color:#aabbd2;margin:8px 0 22px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#7b96f9}.localdot{background:#45d4b0}
+#status{margin-left:auto}.week{display:grid;grid-template-columns:repeat(7,minmax(154px,1fr));gap:10px}
+.day{border:1px solid #2b3c54;border-radius:16px;background:#17253a;padding:13px;min-height:515px}
+.day.today{border-color:#638ef3;box-shadow:0 0 0 1px #638ef350}
+.day h3{margin:0 0 14px;font-size:14px;font-weight:700}.day h3 span{display:block;font-size:24px;margin-top:3px}
+.event{border-radius:9px;background:#27395f;border-left:3px solid #89a8ff;margin:8px 0;padding:9px;font-size:12px;overflow-wrap:anywhere}
+.event.local{background:#17463e;border-color:#45d4b0}.event b{display:block;margin-bottom:3px}
+.slot{display:block;width:100%;text-align:left;border-color:transparent;background:#1f334b;margin:5px 0;font-size:12px;padding:8px}
+.slot.busy{color:#8799b2;background:#162338;opacity:.72}
+@media(max-width:1190px){.week{overflow-x:auto;grid-template-columns:repeat(7,180px)}}
+@media(max-width:650px){body{padding:16px}.day{min-height:460px}}
+</style></head><body>
+<header><div><div class="eyebrow">CELLNET / ÜTEMEZÉS</div><h1>Heti naptár</h1><a href="/">← Vissza a foglalásokhoz</a></div>
+<div class="toolbar"><button id="prev">←</button><strong id="range" class="weeklabel"></strong><button id="next">→</button><button id="today">Ma</button></div></header>
+<div class="legend"><span><i class="dot"></i>Google Calendar</span><span><i class="dot localdot"></i>Helyi foglalás</span><span id="status">Betöltés…</span></div><main id="week" class="week"></main>
 <script>
-const $=id=>document.getElementById(id),pad=n=>String(n).padStart(2,'0'),dateKey=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-function monday(d){let x=new Date(d);x.setHours(12,0,0,0);x.setDate(x.getDate()-(x.getDay()+6)%7);return x}
-let start=monday(new Date());
-async function draw(){let end=new Date(start);end.setDate(end.getDate()+7);$('heading').textContent=dateKey(start)+' – '+dateKey(new Date(end-86400000));let root=$('week');root.replaceChildren();try{let resp=await fetch('/api/calendar/week?start='+dateKey(start));if(!resp.ok)throw Error('HTTP '+resp.status);let data=await resp.json();$('status').textContent=data.google_connected?'Google Calendar + helyi foglalások':'Helyi foglalások (Google API még nincs beállítva)';for(let i=0;i<7;i++){let d=new Date(start);d.setDate(d.getDate()+i);let col=document.createElement('section');col.className='day';let h=document.createElement('h3');h.textContent=d.toLocaleDateString('hu-HU',{weekday:'short',month:'short',day:'numeric'});col.append(h);for(let ev of data.events.filter(e=>e.start.slice(0,10)===dateKey(d))){let div=document.createElement('div');div.className='event';div.textContent=ev.start.slice(11,16)+' '+ev.title;col.append(div)}for(let hour=8;hour<=18;hour++){let b=document.createElement('button');b.className='slot';b.textContent=pad(hour)+':00 + Foglalás';b.onclick=()=>location.href='/?slot='+dateKey(d)+'T'+pad(hour)+':00';col.append(b)}root.append(col)}}catch(e){$('status').textContent='Hiba: '+e.message}}
-$('back').onclick=()=>{start.setDate(start.getDate()-7);draw()};$('forward').onclick=()=>{start.setDate(start.getDate()+7);draw()};$('today').onclick=()=>{start=monday(new Date());draw()};draw();
+const $=id=>document.getElementById(id),pad=n=>String(n).padStart(2,'0');
+function dateKey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function monday(d){const t=new Date(d);t.setHours(12,0,0,0);t.setDate(t.getDate()-(t.getDay()+6)%7);return t}
+let week=monday(new Date());
+const huTime=d=>new Date(d).toLocaleTimeString('hu-HU',{timeZone:'Europe/Budapest',hour:'2-digit',minute:'2-digit'});
+function instant(e,which){const s=e[which];if(!s)return null;if(e.allDay)return new Date(s+'T00:00:00');return new Date(s)}
+function keyForEvent(e){return e.start?.slice(0,10)}
+function slotAt(day,hour){return new Date(day.getFullYear(),day.getMonth(),day.getDate(),hour,0)}
+async function draw(){
+ const end=new Date(week);end.setDate(end.getDate()+7);
+ $('range').textContent=week.toLocaleDateString('hu-HU',{month:'short',day:'numeric'})+' – '+new Date(end.getTime()-86400000).toLocaleDateString('hu-HU',{month:'short',day:'numeric'});
+ const root=$('week');root.replaceChildren();$('status').textContent='Frissítés…';
+ try{
+ const resp=await fetch('/api/calendar/week?start='+dateKey(week));if(!resp.ok)throw Error('HTTP '+resp.status);
+ const data=await resp.json();const events=data.events||[];
+ $('status').textContent=data.google_error?'Google hiba: '+data.google_error:data.google_connected?'Google szinkron aktív':'Google nem csatlakozik – csak helyi foglalások';
+ for(let i=0;i<7;i++){
+  const day=new Date(week);day.setDate(day.getDate()+i);
+  const col=document.createElement('section');col.className='day';
+  if(dateKey(day)===dateKey(new Date()))col.classList.add('today');
+  const heading=document.createElement('h3');heading.textContent=day.toLocaleDateString('hu-HU',{weekday:'long'});
+  const number=document.createElement('span');number.textContent=day.getDate();heading.append(number);col.append(heading);
+  const todayEvents=events.filter(e=>{if(e.allDay){return keyForEvent(e)<=dateKey(day)&&e.end?.slice(0,10)>dateKey(day)}
+    const a=instant(e,'start'),b=instant(e,'end');return a&&b&&a<slotAt(day,24)&&b>slotAt(day,0)});
+  todayEvents.sort((a,b)=>String(a.start).localeCompare(String(b.start)));
+  for(const e of todayEvents){const el=document.createElement('div');el.className='event '+(e.source==='local'?'local':'');
+    const t=document.createElement('b');t.textContent=e.allDay?'Egész nap':huTime(e.start)+'–'+huTime(e.end);
+    const name=document.createElement('span');name.textContent=e.title;el.append(t,name);col.append(el)}
+  for(let hour=8;hour<19;hour++){
+    const t=slotAt(day,hour),until=slotAt(day,hour+1);
+    const busy=events.some(e=>{const a=instant(e,'start'),b=instant(e,'end');return a&&b&&a<until&&b>t});
+    const b=document.createElement('button');b.className='slot'+(busy?' busy':'');
+    b.textContent=pad(hour)+':00 '+(busy?'• Foglalt':'+ Új foglalás');b.disabled=busy;
+    if(!busy)b.onclick=()=>location.href='/?slot='+dateKey(day)+'T'+pad(hour)+':00';
+    col.append(b)
+  }
+  root.append(col)
+ }
+ }catch(e){$('status').textContent='Naptár hiba: '+e.message}
+}
+$('prev').onclick=()=>{week.setDate(week.getDate()-7);draw()};
+$('next').onclick=()=>{week.setDate(week.getDate()+7);draw()};
+$('today').onclick=()=>{week=monday(new Date());draw()};draw();
 </script></body></html>
