@@ -63,3 +63,32 @@ The daily schedule is **supplied to the MCP tool by Echo**; it doesn't fetch Goo
 The REST API also has `POST /print/schedule`, `POST /print/reminder`, and `GET /jobs?limit=20` using the same Bearer token. A local SQLite file stores at most 500 recent print submissions; no message content is retained. The DB is gitignored.
 
 **Updating the Windows host:** stop both uvicorn processes, run `git pull`, then relaunch `start-api.ps1` and `start-mcp.ps1`. Echo should refresh its tool list after reconnecting. These features are code-complete but need live printer verification.
+
+## Windows boot-time startup (v0.6)
+
+API and MCP run independently at boot through Windows Task Scheduler, without an interactive RDP login.
+
+1. `git pull`, then stop the two interactive uvicorn instances.
+2. Open **Windows PowerShell as Administrator** in the project folder.
+3. Run `powershell -ExecutionPolicy Bypass -File .\install-startup.ps1`.
+4. Start them now with `Start-ScheduledTask Cellnet-Birch-API` and `Start-ScheduledTask Cellnet-Birch-MCP`.
+5. Verify `Get-ScheduledTask Cellnet-Birch-*` and `http://127.0.0.1:8765/health`; reconnect Echo.
+
+Tasks use **SYSTEM**. Windows printers installed only for the interactive user may not be available under SYSTEM. If printing fails while the endpoints are online, install/share the printer machine-wide or change the task identity to an appropriate service account. Uninstall with `uninstall-startup.ps1` in elevated PowerShell. Startup runner installs no Python packages; dependency updates remain manual via `start-api.ps1`.
+
+## Custom and two-copy printing (v0.6)
+
+`POST /print/appointment` accepts `mode="customer"` (name/time/service/reference, no technician notes) or `mode="technician"` (adds phone and private notes). The Docker booking page has one button per copy. No "Várjuk szeretettel" footer.
+
+Echo's new `print_custom_receipt` tool, and the authenticated REST `POST /print/custom`, accept e.g.:
+
+```json
+{"blocks":[
+  {"type":"heading","text":"CELLNET"},
+  {"type":"text","text":"Árvíztűrő tükörfúrógép"},
+  {"type":"divider"},
+  {"type":"qr","data":"https://example.com","size":5}
+],"cut":true,"beep":false,"urgent":false}
+```
+
+Valid block types are `text`, `heading`, `divider`, `qr`. Free layout is rendered to raster (no arbitrary raw ESC/POS bytes accepted). New MCP tools appear after refreshing/reconnecting the client. Untested on this version of firmware.
