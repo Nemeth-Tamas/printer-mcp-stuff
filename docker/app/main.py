@@ -7,7 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
-from .sms import init_sms, replace_pending, cancel_pending, outbox, normalize_phone
+from .sms import init_sms, replace_pending, cancel_pending, outbox, normalize_phone, sms_text
 from .google_feed import create_event, delete_event, fetch_events, update_event, write_calendar
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -186,8 +186,10 @@ def print_appointment(appointment_id: int, mode: str = 'customer'):
                                headers={"Authorization": "Bearer " + token}, json=payload)
             resp.raise_for_status()
             return resp.json()
-    except httpx.HTTPError:
-        raise HTTPException(502, "Printer API failed") from None
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(502, f"Printer API HTTP {exc.response.status_code}: {exc.response.text[:180]}") from None
+    except httpx.RequestError as exc:
+        raise HTTPException(502, f"Printer connection failed ({type(exc).__name__}): {str(exc)[:140]}") from None
 
 
 @app.put("/api/appointments/{appointment_id}")
@@ -237,3 +239,42 @@ app.include_router(calendar_router)
 def sms_outbox():
     with database() as db:
         return {"mode": os.getenv("SMS_MODE", "dry-run"), "messages": outbox(db)}
+
+@app.post("/api/appointments/{appointment_id}/sms/send")
+def send_booking_sms(appointment_id: int):
+    """Queue a single explicit manual confirmation; never replay old queued reminders."""
+    from datetime import timezone
+    with database() as db:
+        row = db.execute("SELECT * FROM appointments WHERE id=? AND status='booked'", (appointment_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Active appointment not found")
+        if not row["sms_enabled"]:
+            raise HTTPException(409, "SMS not enabled for this appointment")
+        phone = normalize_phone(row["phone"])
+        now = datetime.now(timezone.utc).isoformat()
+        # Prevent double clicks / repeated sends while a message is already queued.
+        recent = db.execute("""SELECT id FROM sms_outbox WHERE booking_id=? AND kind='manual'
+            AND status IN ('pending','processing') LIMIT 1""", (appointment_id,)).fetchone()
+        if recent:
+            raise HTTPException(409, "Manual SMS already queued")
+        cursor = db.execute("""INSERT INTO sms_outbox
+            (booking_id, kind, phone, body, due_at, status, created_at)
+            VALUES (?,?,?,?,?,'pending',?)""",
+            (appointment_id, "manual", phone, sms_text("confirmation", row), now, now))
+        return {"ok": True, "sms_id": cursor.lastrowid, "status": "pending"}
+
+@app.get("/api/printer/status")
+def printer_status():
+    """Diagnostic: distinguish reachability, authentication and spooler errors."""
+    url = os.getenv("PRINTER_API_URL", "").rstrip("/")
+    token = os.getenv("PRINTER_API_TOKEN", "")
+    if not url or not token:
+        raise HTTPException(503, "PRINTER_API_URL or PRINTER_API_TOKEN not configured in Docker")
+    try:
+        with httpx.Client(timeout=5) as client:
+            health_response = client.get(url + "/health")
+            printer_response = client.get(url + "/printers", headers={"Authorization": "Bearer " + token})
+            return {"health_http": health_response.status_code, "printer_http": printer_response.status_code,
+                    "printers": printer_response.json() if printer_response.is_success else printer_response.text[:180]}
+    except httpx.RequestError as exc:
+        raise HTTPException(502, f"Printer unreachable ({type(exc).__name__}): {str(exc)[:140]}") from None
