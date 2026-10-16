@@ -12,7 +12,6 @@ button:disabled{opacity:.5}.danger{background:#a43c46}.ghost{background:#344966}
 article{border-bottom:1px solid #43516c;padding:12px 0}small{color:#b8c9df}#notice{min-height:2em}
 </style></head>
 <body><h1>Cellnet Booking</h1><p>Időpontfoglalás és nyomtatás — helyi adminfelület</p>
-<label>Admin API token <input type="password" id="token" placeholder="BOOKING_ADMIN_TOKEN" autocomplete="off"></label>
 <main><section><h2>Új időpont</h2><form id="form">
 <label>Ügyfél neve <input name="customer" required maxlength="120"></label>
 <label>Telefonszám <input name="phone" required maxlength="40"></label>
@@ -25,7 +24,7 @@ article{border-bottom:1px solid #43516c;padding:12px 0}small{color:#b8c9df}#noti
 <script>
 const $=id=>document.getElementById(id);
 async function api(path,method='GET',body){
- const res=await fetch(path,{method,headers:{'Authorization':'Bearer '+$('token').value,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const res=await fetch(path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
  if(!res.ok)throw Error('HTTP '+res.status+' — '+(await res.text()).slice(0,130));
  return res.json();
 }
