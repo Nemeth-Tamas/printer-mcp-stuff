@@ -2,7 +2,7 @@
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -66,7 +66,28 @@ def list_appointments():
 @app.post("/api/appointments", status_code=201)
 def create_appointment(req: AppointmentIn):
     when = validate_time(req.starts_at)
+    start_time = datetime.fromisoformat(when)
+    end_time = start_time + timedelta(minutes=req.duration_minutes)
+    try:
+        google, connected = fetch_events(start_time - timedelta(days=1), end_time + timedelta(days=1))
+        if not connected:
+            raise RuntimeError("Google Calendar not configured")
+        for event in google:
+            from datetime import date, time
+            begin = datetime.fromisoformat(event["start"]) if not event["allDay"] else datetime.combine(date.fromisoformat(event["start"]), time.min, tzinfo=TZ)
+            finish = datetime.fromisoformat(event["end"]) if not event["allDay"] else datetime.combine(date.fromisoformat(event["end"]), time.min, tzinfo=TZ)
+            if begin < end_time and finish > start_time:
+                raise HTTPException(409, "Az időpont ütközik egy Google Calendar eseménnyel")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, "Google Calendar availability check failed: " + str(exc)[:160]) from None
     with database() as db:
+        existing = db.execute("SELECT starts_at, duration_minutes FROM appointments WHERE status='booked'").fetchall()
+        for current in existing:
+            begin = datetime.fromisoformat(current["starts_at"])
+            if begin < end_time and begin + timedelta(minutes=current["duration_minutes"]) > start_time:
+                raise HTTPException(409, "Az időpont ütközik egy helyi foglalással")
         cursor = db.execute(
           "INSERT INTO appointments(customer, phone, service, starts_at, duration_minutes, notes, created_at) VALUES (?,?,?,?,?,?,?)",
           (req.customer, req.phone, req.service, when, req.duration_minutes, req.notes, datetime.now(TZ).isoformat()))
