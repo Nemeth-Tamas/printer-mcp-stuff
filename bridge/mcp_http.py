@@ -31,9 +31,9 @@ mcp = FastMCP(
 )
 
 @mcp.tool()
-def print_receipt(text: str, cut: bool = True, beep: bool = False) -> dict:
+def print_receipt(text: str, cut: bool = True, beep: bool = False, urgent: bool = False) -> dict:
     """Queue a Unicode thermal receipt (Hungarian accents supported)."""
-    return {"status": "queued", "job_id": do_text(text, cut, beep)}
+    return {"status": "queued", "job_id": do_text(text, cut, beep, urgent)}
 
 @mcp.tool()
 def print_qr_code(data: str, caption: str = "", cut: bool = True, beep: bool = False) -> dict:
@@ -77,7 +77,7 @@ def print_reminder(title: str, message: str, when: str = "", priority: str = "no
         raise ValueError("Invalid reminder length")
     if priority not in ("normal", "urgent"):
         raise ValueError("priority must be normal or urgent")
-    return {"status": "queued", "job_id": do_text(reminder(title, message, when, priority), cut, beep)}
+    return {"status": "queued", "job_id": do_text(reminder(title, message, when, priority), cut, beep, priority == "urgent")}
 
 
 @mcp.tool()
