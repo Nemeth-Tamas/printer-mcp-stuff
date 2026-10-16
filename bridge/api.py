@@ -5,6 +5,7 @@ from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel, Field
 from .printer import print_text, print_qr, print_appointment, list_printers
 from .tickets import daily_schedule, reminder
+from .history import recent
 
 app = FastAPI(title="Echo Birch Print Bridge", version="0.4.0")
 
@@ -98,3 +99,7 @@ def schedule_receipt(req: ScheduleRequest):
 def reminder_receipt(req: ReminderRequest):
     text = reminder(req.title, req.message, req.when, req.priority)
     return submit(print_text, text, cut=req.cut, beep=req.beep)
+
+@app.get("/jobs", dependencies=[Depends(authorize)])
+def jobs(limit: int = 20):
+    return {"jobs": recent(limit)}
