@@ -53,3 +53,11 @@ Ubuntu credentials at `/run/google/service-account.json` are bind-mounted read-o
 A new booking checks existing Google events and local bookings for overlap, then creates a Google event and stores its ID with the SQLite booking. A Google API failure aborts a new booking instead of silently saving it only in SQLite. Cancelling a synced booking deletes its Google event. Older local-only bookings remain local-only; synced events are not duplicated in the weekly view.
 
 **Known MVP limits:** no reschedule/edit UI, no background reconciliation for changes made directly in Google Calendar, no automatic recovery from network outages, no SMS. Only make bookings from one operator at a time while the MVP is being tested. Service account setup (not OAuth) requires explicit calendar sharing. Google events and private appointment details are visible on the trusted LAN/VPN.
+
+## Editing and rescheduling
+
+The booking page now has **Szerkesztés** for Google-synced active bookings. Editing preserves the Google event ID, checks new times against Google and SQLite appointments, and updates the Google event. The calendar UI offers 30-minute starting slots and disables slots overlapping an event. The server rechecks collisions before saving; a 30-minute free button does not necessarily mean that a longer service will fit.
+
+Existing legacy local-only bookings intentionally cannot yet be edited with Google rescheduling. This is a trusted-LAN MVP, not a multi-user transactional scheduler; concurrent operators and calendar edits from another device can still race. SMS, reconciliation and automatic reschedule notifications are not implemented.
+
+Deploy changes with `git pull && cd docker && docker compose up -d --build`. Keep your existing `.env` and credentials.
