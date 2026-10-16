@@ -30,6 +30,7 @@ article strong{font-size:15px}article p{margin:9px 0;color:#afbfda;font-size:13p
 <label>Időpont <input name="starts_at" type="datetime-local" required></label>
 <label>Időtartam (perc) <input name="duration_minutes" type="number" value="60" min="15" max="480"></label>
 <label>Megjegyzés <textarea name="notes" rows="3" maxlength="1500"></textarea></label>
+<label style="display:flex;align-items:center;gap:10px"><input type="checkbox" name="sms_enabled" style="width:auto">SMS visszaigazolás és 24 órás emlékeztető</label>
 <button id="save" type="submit">Időpont mentése</button><button id="clear" type="button" class="ghost" hidden>Mégse</button></form></section>
 <section><h2>Foglalások</h2><div class="filters"><button type="button" data-view="upcoming" class="active">Közelgő</button><button type="button" data-view="past">Korábbi</button><button type="button" data-view="cancelled">Lemondott</button><button type="button" data-view="all">Összes</button></div><input id="search" placeholder="Keresés: név, telefon, szolgáltatás…" aria-label="Foglalások keresése"><button class="ghost" id="refresh">Frissítés</button><div id="notice" role="status"></div><div id="appointments"></div></section></main>
 <script>
@@ -51,7 +52,7 @@ async function refresh(){
  const repeat=document.createElement('button');repeat.textContent='Új foglalás ugyanennek';repeat.className='ghost';
  repeat.onclick=()=>{editing=null;$('clear').click();$('form').elements.customer.value=r.customer;$('form').elements.phone.value=r.phone;$('form').elements.service.value=r.service;$('formtitle').textContent='Visszatérő ügyfél – új foglalás';$('form').scrollIntoView({behavior:'smooth'});};
  const edit=document.createElement('button');edit.textContent='Szerkesztés';edit.className='ghost';edit.disabled=r.status==='cancelled'||!r.google_event_id;
- edit.onclick=()=>{editing=r.id;const form=$('form');for(const name of ['customer','phone','service','notes','duration_minutes'])form.elements[name].value=r[name];const d=new Date(r.starts_at);const two=n=>String(n).padStart(2,'0');form.elements.starts_at.value=d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())+'T'+two(d.getHours())+':'+two(d.getMinutes());$('formtitle').textContent='Foglalás szerkesztése #'+r.id;$('save').textContent='Változások mentése';$('clear').hidden=false;form.scrollIntoView({behavior:'smooth'});};
+ edit.onclick=()=>{editing=r.id;const form=$('form');for(const name of ['customer','phone','service','notes','duration_minutes'])form.elements[name].value=r[name];form.elements.sms_enabled.checked=Boolean(r.sms_enabled);const d=new Date(r.starts_at);const two=n=>String(n).padStart(2,'0');form.elements.starts_at.value=d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate())+'T'+two(d.getHours())+':'+two(d.getMinutes());$('formtitle').textContent='Foglalás szerkesztése #'+r.id;$('save').textContent='Változások mentése';$('clear').hidden=false;form.scrollIntoView({behavior:'smooth'});};
  const cancel=document.createElement('button');cancel.textContent='Lemondás';cancel.className='danger';cancel.disabled=r.status==='cancelled';
  cancel.onclick=()=>api('/api/appointments/'+r.id+'/cancel','PATCH').then(refresh).catch(e=>message(e.message));
  a.append(h,p,detail,document.createElement('br'),edit,repeat,print,tech,cancel);out.append(a);
@@ -74,7 +75,7 @@ $('clear').onclick=()=>{editing=null;$('form').reset();$('formtitle').textConten
 $('form').onsubmit=async e=>{
  e.preventDefault();const f=new FormData(e.target);const raw=f.get('starts_at');
  const d=new Date(raw);if(isNaN(d)){message('Érvénytelen időpont');return}
- const body={customer:f.get('customer'),phone:f.get('phone'),service:f.get('service'),starts_at:d.toISOString(),duration_minutes:Number(f.get('duration_minutes')),notes:f.get('notes')};
+ const body={customer:f.get('customer'),phone:f.get('phone'),service:f.get('service'),starts_at:d.toISOString(),duration_minutes:Number(f.get('duration_minutes')),notes:f.get('notes'),sms_enabled:f.has('sms_enabled')};
  try{await api(editing?'/api/appointments/'+editing:'/api/appointments',editing?'PUT':'POST',body);$('clear').click();message('Foglalás és Google Calendar frissítve.');refresh()}catch(err){message(err.message)}
 };
 refresh();
