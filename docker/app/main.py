@@ -7,6 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
+from .google_feed import create_event, delete_event, fetch_events
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field
 ROOT = Path(__file__).resolve().parent
 DB = Path(os.getenv("BOOKING_DB", "/data/booking.sqlite3"))
 TZ = ZoneInfo("Europe/Budapest")
-app = FastAPI(title="Cellnet Booking", version="0.2.0")
+app = FastAPI(title="Cellnet Booking", version="0.3.0")
 
 @contextmanager
 def database():
@@ -28,6 +29,9 @@ def database():
           starts_at TEXT NOT NULL, duration_minutes INTEGER NOT NULL,
           notes TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'booked',
           created_at TEXT NOT NULL)""")
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(appointments)")}
+        if "google_event_id" not in cols:
+            conn.execute("ALTER TABLE appointments ADD COLUMN google_event_id TEXT")
         yield conn
         conn.commit()
     finally:
@@ -48,7 +52,7 @@ def validate_time(value: datetime):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "0.2.0"}
+    return {"ok": True, "version": "0.3.0"}
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -66,14 +70,28 @@ def create_appointment(req: AppointmentIn):
         cursor = db.execute(
           "INSERT INTO appointments(customer, phone, service, starts_at, duration_minutes, notes, created_at) VALUES (?,?,?,?,?,?,?)",
           (req.customer, req.phone, req.service, when, req.duration_minutes, req.notes, datetime.now(TZ).isoformat()))
-        return {"id": cursor.lastrowid, "status": "booked", "starts_at": when}
+        booking_id = cursor.lastrowid
+        try:
+            event_id = create_event(booking_id, req.customer, req.phone, req.service,
+                                    when, req.duration_minutes, req.notes)
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(502, "Google Calendar event creation failed: " + str(exc)[:180]) from None
+        db.execute("UPDATE appointments SET google_event_id=? WHERE id=?", (event_id, booking_id))
+        return {"id": booking_id, "status": "booked", "starts_at": when, "google_event_id": event_id}
 
 @app.patch("/api/appointments/{appointment_id}/cancel")
 def cancel_appointment(appointment_id: int):
     with database() as db:
-        cur = db.execute("UPDATE appointments SET status='cancelled' WHERE id=? AND status='booked'", (appointment_id,))
-        if not cur.rowcount:
+        row = db.execute("SELECT * FROM appointments WHERE id=? AND status='booked'", (appointment_id,)).fetchone()
+        if not row:
             raise HTTPException(404, "Active appointment not found")
+        if row["google_event_id"]:
+            try:
+                delete_event(row["google_event_id"])
+            except Exception as exc:
+                raise HTTPException(502, "Google Calendar cancellation failed: " + str(exc)[:180]) from None
+        db.execute("UPDATE appointments SET status='cancelled' WHERE id=?", (appointment_id,))
         return {"ok": True}
 
 @app.post("/api/appointments/{appointment_id}/print")
