@@ -32,7 +32,7 @@ let week=monday(new Date());
 const huTime=d=>new Date(d).toLocaleTimeString('hu-HU',{timeZone:'Europe/Budapest',hour:'2-digit',minute:'2-digit'});
 function instant(e,which){const s=e[which];if(!s)return null;if(e.allDay)return new Date(s+'T00:00:00');return new Date(s)}
 function keyForEvent(e){return e.start?.slice(0,10)}
-function slotAt(day,hour){return new Date(day.getFullYear(),day.getMonth(),day.getDate(),hour,0)}
+function slotAt(day,hour,minute=0){return new Date(day.getFullYear(),day.getMonth(),day.getDate(),hour,minute)}
 async function draw(){
  const end=new Date(week);end.setDate(end.getDate()+7);
  $('range').textContent=week.toLocaleDateString('hu-HU',{month:'short',day:'numeric'})+' – '+new Date(end.getTime()-86400000).toLocaleDateString('hu-HU',{month:'short',day:'numeric'});
@@ -53,12 +53,13 @@ async function draw(){
   for(const e of todayEvents){const el=document.createElement('div');el.className='event '+(e.source==='local'?'local':'');
     const t=document.createElement('b');t.textContent=e.allDay?'Egész nap':huTime(e.start)+'–'+huTime(e.end);
     const name=document.createElement('span');name.textContent=e.title;el.append(t,name);col.append(el)}
-  for(let hour=8;hour<19;hour++){
-    const t=slotAt(day,hour),until=slotAt(day,hour+1);
+  for(let half=16;half<38;half++){
+    const hour=Math.floor(half/2),minute=(half%2)*30;
+    const t=slotAt(day,hour,minute),until=new Date(t.getTime()+30*60000);
     const busy=events.some(e=>{const a=instant(e,'start'),b=instant(e,'end');return a&&b&&a<until&&b>t});
     const b=document.createElement('button');b.className='slot'+(busy?' busy':'');
-    b.textContent=pad(hour)+':00 '+(busy?'• Foglalt':'+ Új foglalás');b.disabled=busy;
-    if(!busy)b.onclick=()=>location.href='/?slot='+dateKey(day)+'T'+pad(hour)+':00';
+    b.textContent=pad(hour)+':'+pad(minute)+' '+(busy?'• Foglalt':'+ Új foglalás');b.disabled=busy;
+    if(!busy)b.onclick=()=>location.href='/?slot='+dateKey(day)+'T'+pad(hour)+':'+pad(minute);
     col.append(b)
   }
   root.append(col)
