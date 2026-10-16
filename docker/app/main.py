@@ -7,7 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
-from .sms import init_sms, replace_pending, cancel_pending, outbox
+from .sms import init_sms, replace_pending, cancel_pending, outbox, normalize_phone
 from .google_feed import create_event, delete_event, fetch_events, update_event, write_calendar
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -107,6 +107,11 @@ def customers(search: str = ""):
 
 @app.post("/api/appointments", status_code=201)
 def create_appointment(req: AppointmentIn):
+    if req.sms_enabled:
+        try:
+            normalize_phone(req.phone)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
     when = validate_time(req.starts_at)
     start_time = datetime.fromisoformat(when)
     end_time = start_time + timedelta(minutes=req.duration_minutes)
