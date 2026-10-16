@@ -116,7 +116,7 @@ def cancel_appointment(appointment_id: int):
         return {"ok": True}
 
 @app.post("/api/appointments/{appointment_id}/print")
-def print_appointment(appointment_id: int):
+def print_appointment(appointment_id: int, mode: str = 'customer'):
     with database() as db:
         row = db.execute("SELECT * FROM appointments WHERE id=?", (appointment_id,)).fetchone()
     if not row:
@@ -125,9 +125,11 @@ def print_appointment(appointment_id: int):
     token = os.getenv("PRINTER_API_TOKEN", "")
     if not url or not token:
         raise HTTPException(503, "Configure printer API URL/token")
+    if mode not in ("customer", "technician"):
+        raise HTTPException(400, "Invalid copy type")
     payload = dict(customer=row["customer"], starts_at=row["starts_at"],
                    service=row["service"], notes=row["notes"], reference=f"CEL-{appointment_id}",
-                   cut=True, beep=False)
+                   cut=True, beep=False, mode=mode, phone=row["phone"])
     try:
         with httpx.Client(timeout=20) as client:
             resp = client.post(url + "/print/appointment",
