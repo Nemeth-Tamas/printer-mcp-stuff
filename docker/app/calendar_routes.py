@@ -20,16 +20,16 @@ def calendar_week(start: date):
     beginning = datetime.combine(start, time.min, tzinfo=TZ)
     ending = beginning + timedelta(days=7)
     with database() as conn:
-        rows = conn.execute("SELECT starts_at, duration_minutes, service, status FROM appointments WHERE status='booked'").fetchall()
+        rows = conn.execute("SELECT id, google_event_id, starts_at, duration_minutes, service, status FROM appointments WHERE status='booked'").fetchall()
     local = []
     for row in rows:
         begins = datetime.fromisoformat(row["starts_at"])
         ends = begins + timedelta(minutes=row["duration_minutes"])
         if begins < ending and ends > beginning:
             local.append({"title": "Cellnet: " + row["service"], "start": begins.isoformat(),
-                          "end": ends.isoformat(), "allDay": False, "source": "local"})
+                          "end": ends.isoformat(), "allDay": False, "source": "local", "id": row["id"], "google_event_id": row["google_event_id"]})
     try:
         remote, connected = fetch_events(beginning, ending)
     except Exception as exc:
         return {"events": local, "google_connected": False, "google_error": str(exc)[:180]}
-    return {"events": local + remote, "google_connected": connected}
+    return {"events": [e for e in local if not e["google_event_id"]] + remote, "google_connected": connected}
