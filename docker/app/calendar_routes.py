@@ -32,4 +32,4 @@ def calendar_week(start: date):
         remote, connected = fetch_events(beginning, ending)
     except Exception as exc:
         return {"events": local, "google_connected": False, "google_error": str(exc)[:180]}
-    return {"events": [e for e in local if not e["google_event_id"]] + remote, "google_connected": connected}
+    return {"events": [e for e in local if not e["google_event_id"] or not connected] + remote, "google_connected": connected}
