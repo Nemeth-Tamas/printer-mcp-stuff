@@ -61,3 +61,9 @@ The booking page now has **Szerkesztés** for Google-synced active bookings. Edi
 Existing legacy local-only bookings intentionally cannot yet be edited with Google rescheduling. This is a trusted-LAN MVP, not a multi-user transactional scheduler; concurrent operators and calendar edits from another device can still race. SMS, reconciliation and automatic reschedule notifications are not implemented.
 
 Deploy changes with `git pull && cd docker && docker compose up -d --build`. Keep your existing `.env` and credentials.
+
+## Booking workflow additions
+
+The main page now defaults to upcoming appointments (ascending), with tabs for past, cancelled and all appointments, plus live search by customer name, phone or service. Repeat customers can be reused from name suggestions or the **Új foglalás ugyanennek** action. Customer suggestions are derived from existing SQLite appointments, not a separate CRM database. All appointment changes still use the existing Google Calendar sync and conflict checks.
+
+`GET /api/appointments?view=upcoming|past|cancelled|all&search=...` and `GET /api/customers?search=...` are available on the trusted LAN/VPN. Calendar and printer services need no restart for these changes; only rebuild the Docker application. SMS sending is not implemented.
