@@ -8,6 +8,7 @@ import secrets
 from contextlib import asynccontextmanager
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -20,6 +21,11 @@ mcp = FastMCP(
     stateless_http=True,
     json_response=True,
     streamable_http_path="/",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=["localhost:*", "127.0.0.1:*", "10.10.10.12:8766"],
+        allowed_origins=["http://localhost:*", "http://127.0.0.1:*", "http://10.10.10.12:8766"],
+    ),
 )
 
 @mcp.tool()
