@@ -67,3 +67,18 @@ Deploy changes with `git pull && cd docker && docker compose up -d --build`. Kee
 The main page now defaults to upcoming appointments (ascending), with tabs for past, cancelled and all appointments, plus live search by customer name, phone or service. Repeat customers can be reused from name suggestions or the **Új foglalás ugyanennek** action. Customer suggestions are derived from existing SQLite appointments, not a separate CRM database. All appointment changes still use the existing Google Calendar sync and conflict checks.
 
 `GET /api/appointments?view=upcoming|past|cancelled|all&search=...` and `GET /api/customers?search=...` are available on the trusted LAN/VPN. Calendar and printer services need no restart for these changes; only rebuild the Docker application. SMS sending is not implemented.
+
+## BulkGate SMS (transactional only)
+
+Booking form includes an unchecked SMS opt-in checkbox. Enabled bookings queue a confirmation immediately and a reminder 24 hours before the visit, if the booking is more than 24 hours away. Cancelling a booking cancels pending SMS; editing replaces pending messages. A worker polls SQLite every 30 seconds. A failed or uncertain provider submission is **not** automatically retried, avoiding possible duplicate charges/messages.
+
+Set in `docker/.env`:
+```ini
+SMS_MODE=dry-run
+BULKGATE_APPLICATION_ID=
+BULKGATE_APPLICATION_TOKEN=
+BULKGATE_SENDER=
+```
+Use the BulkGate Application ID and Application Token from your BulkGate application. Empty sender uses the system-default sender. Optional named sender must be approved/configured with BulkGate. `SMS_MODE=dry-run` simulates messages **without sending** and marks them `simulated`; switching to `live` later does not replay old simulations. View history at `GET /api/sms/outbox`. Once tested, set `SMS_MODE=live` and rebuild/recreate containers with `docker compose up -d --build`.
+
+SMS templates currently use GSM-safe unaccented Hungarian to avoid Unicode multipart charges. The sender API is BulkGate Simple Transactional, not promotional. Keep provider credentials only in the local .env. A provider acceptance is not proof of handset delivery. Customer permission to receive appointment notifications should be obtained before checking the SMS option.
