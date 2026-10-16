@@ -82,3 +82,20 @@ def delete_event(event_id):
         response = client.delete(BASE + quote(target, safe="") + "/events/" + quote(event_id, safe=""),
                                  headers=client_credentials())
         response.raise_for_status()
+
+def update_event(event_id, booking_id, customer, phone, service, starts_at, duration_minutes, notes):
+    """Update an existing event in place, retaining its Google event ID."""
+    from datetime import datetime, timedelta
+    beginning = datetime.fromisoformat(starts_at)
+    ending = beginning + timedelta(minutes=duration_minutes)
+    payload = {
+        "summary": f"{customer} – {service}",
+        "description": f"Cellnet foglalás #{booking_id}\nTelefon: {phone}\nMegjegyzés: {notes}",
+        "start": {"dateTime": beginning.isoformat(), "timeZone": "Europe/Budapest"},
+        "end": {"dateTime": ending.isoformat(), "timeZone": "Europe/Budapest"},
+    }
+    url = BASE + quote(write_calendar(), safe="") + "/events/" + quote(event_id, safe="")
+    with httpx.Client(timeout=20) as client:
+        response = client.patch(url, json=payload, headers=client_credentials())
+        response.raise_for_status()
+        return response.json()["id"]
