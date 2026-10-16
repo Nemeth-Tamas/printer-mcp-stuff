@@ -7,6 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
+from .sms import init_sms, replace_pending, cancel_pending, outbox
 from .google_feed import create_event, delete_event, fetch_events, update_event, write_calendar
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -32,6 +33,9 @@ def database():
         cols = {r[1] for r in conn.execute("PRAGMA table_info(appointments)")}
         if "google_event_id" not in cols:
             conn.execute("ALTER TABLE appointments ADD COLUMN google_event_id TEXT")
+        if "sms_enabled" not in cols:
+            conn.execute("ALTER TABLE appointments ADD COLUMN sms_enabled INTEGER NOT NULL DEFAULT 0")
+        init_sms(conn)
         yield conn
         conn.commit()
     finally:
@@ -44,6 +48,7 @@ class AppointmentIn(BaseModel):
     starts_at: datetime
     duration_minutes: int = Field(default=60, ge=15, le=480)
     notes: str = Field(default="", max_length=1500)
+    sms_enabled: bool = False
 
 def validate_time(value: datetime):
     if value.tzinfo is None:
@@ -135,7 +140,9 @@ def create_appointment(req: AppointmentIn):
         except Exception as exc:
             db.rollback()
             raise HTTPException(502, "Google Calendar event creation failed: " + str(exc)[:180]) from None
-        db.execute("UPDATE appointments SET google_event_id=? WHERE id=?", (event_id, booking_id))
+        db.execute("UPDATE appointments SET google_event_id=?, sms_enabled=? WHERE id=?", (event_id, int(req.sms_enabled), booking_id))
+        saved = db.execute("SELECT * FROM appointments WHERE id=?", (booking_id,)).fetchone()
+        replace_pending(db, saved, req.sms_enabled)
         return {"id": booking_id, "status": "booked", "starts_at": when, "google_event_id": event_id}
 
 @app.patch("/api/appointments/{appointment_id}/cancel")
@@ -150,6 +157,7 @@ def cancel_appointment(appointment_id: int):
             except Exception as exc:
                 raise HTTPException(502, "Google Calendar cancellation failed: " + str(exc)[:180]) from None
         db.execute("UPDATE appointments SET status='cancelled' WHERE id=?", (appointment_id,))
+        cancel_pending(db, appointment_id)
         return {"ok": True}
 
 @app.post("/api/appointments/{appointment_id}/print")
@@ -211,9 +219,16 @@ def edit_appointment(appointment_id: int, req: AppointmentIn):
             raise
         except Exception as exc:
             raise HTTPException(502, "Google Calendar update failed: " + str(exc)[:180]) from None
-        db.execute("UPDATE appointments SET customer=?, phone=?, service=?, starts_at=?, duration_minutes=?, notes=? WHERE id=?",
-                   (req.customer, req.phone, req.service, when, req.duration_minutes, req.notes, appointment_id))
+        db.execute("UPDATE appointments SET customer=?, phone=?, service=?, starts_at=?, duration_minutes=?, notes=?, sms_enabled=? WHERE id=?",
+                   (req.customer, req.phone, req.service, when, req.duration_minutes, req.notes, int(req.sms_enabled), appointment_id))
+        refreshed = db.execute("SELECT * FROM appointments WHERE id=?", (appointment_id,)).fetchone()
+        replace_pending(db, refreshed, req.sms_enabled)
         return {"id": appointment_id, "status": "booked", "google_event_id": original["google_event_id"]}
 
 from .calendar_routes import router as calendar_router
 app.include_router(calendar_router)
+
+@app.get("/api/sms/outbox")
+def sms_outbox():
+    with database() as db:
+        return {"mode": os.getenv("SMS_MODE", "dry-run"), "messages": outbox(db)}
