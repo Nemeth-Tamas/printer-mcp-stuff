@@ -8,5 +8,12 @@ services:
     volumes:
       - booking_data:/data
       - /run/google:/run/google:ro
+  sms-worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "-m", "app.sms_worker"]
+    volumes:
+      - booking_data:/data
 volumes:
   booking_data:
