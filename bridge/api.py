@@ -4,8 +4,9 @@ import secrets
 from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel, Field
 from .printer import print_text, print_qr, print_appointment, list_printers
+from .tickets import daily_schedule, reminder
 
-app = FastAPI(title="Echo Birch Print Bridge", version="0.2.0")
+app = FastAPI(title="Echo Birch Print Bridge", version="0.4.0")
 
 def authorize(authorization: str | None = Header(default=None)):
     token = os.getenv("PRINT_API_TOKEN")
@@ -46,7 +47,7 @@ def submit(fn, *args, **kwargs):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "0.2.0"}
+    return {"ok": True, "version": "0.4.0"}
 
 @app.get("/printers", dependencies=[Depends(authorize)])
 def printers():
@@ -67,3 +68,33 @@ def print_qrcode(req: QRRequest):
 def appointment(req: AppointmentRequest):
     return submit(print_appointment, req.customer, req.starts_at, req.service,
                   notes=req.notes, reference=req.reference, cut=req.cut, beep=req.beep)
+
+class ScheduleItem(BaseModel):
+    time: str = Field(min_length=1, max_length=30)
+    customer: str = Field(min_length=1, max_length=120)
+    service: str = Field(min_length=1, max_length=140)
+    notes: str = Field(default="", max_length=400)
+
+class ScheduleRequest(BaseModel):
+    day: str = Field(min_length=1, max_length=80)
+    appointments: list[ScheduleItem] = Field(default_factory=list, max_length=60)
+    cut: bool = True
+    beep: bool = False
+
+class ReminderRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=1200)
+    when: str = Field(default="", max_length=100)
+    priority: str = Field(default="normal", pattern="^(normal|urgent)$")
+    cut: bool = True
+    beep: bool = True
+
+@app.post("/print/schedule", dependencies=[Depends(authorize)])
+def schedule_receipt(req: ScheduleRequest):
+    text = daily_schedule(req.day, [a.model_dump() for a in req.appointments])
+    return submit(print_text, text, cut=req.cut, beep=req.beep)
+
+@app.post("/print/reminder", dependencies=[Depends(authorize)])
+def reminder_receipt(req: ReminderRequest):
+    text = reminder(req.title, req.message, req.when, req.priority)
+    return submit(print_text, text, cut=req.cut, beep=req.beep)
