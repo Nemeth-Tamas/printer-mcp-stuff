@@ -7,6 +7,6 @@ services:
       - "8088:8088"
     volumes:
       - booking_data:/data
-      - ./credentials:/run/google:ro
+      - /run/google:/run/google:ro
 volumes:
   booking_data:
