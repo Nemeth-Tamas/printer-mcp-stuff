@@ -149,12 +149,49 @@ def print_qr(data, caption="", size=5, cut=True, beep=False):
     images.append(render_qr(data, size))
     return print_image(stack_images(images), cut, beep)
 
-def print_appointment(customer, starts_at, service, notes="", reference="", cut=True, beep=True):
+def print_appointment(customer, starts_at, service, notes="", reference="", cut=True, beep=True, mode="customer", phone=""):
+    if mode not in ("customer", "technician"):
+        raise ValueError("mode must be customer or technician")
     lines = ["CELLNET KFT.", "IDŐPONTFOGLALÁS", "--------------------------",
-             f"Időpont: {starts_at}", f"Ügyfél: {customer}", f"Szolgáltatás: {service}"]
+             f"Időpont: {starts_at}", f"Szolgáltatás: {service}"]
     if reference:
         lines.append(f"Azonosító: {reference}")
-    if notes:
-        lines.extend(["--------------------------", f"Megjegyzés: {notes}"])
-    lines.extend(["--------------------------", "Várjuk szeretettel!"])
+    if mode == "technician":
+        lines.extend([f"Ügyfél: {customer}", f"Telefon: {phone or '-'}"])
+        if notes:
+            lines.extend(["--------------------------", f"Belső megjegyzés: {notes}"])
+        lines.append("TECHNIKUS PÉLDÁNY")
+    else:
+        lines.extend(["--------------------------", "ÜGYFÉL PÉLDÁNY"])
     return print_text("\n".join(lines), cut, beep)
+
+def print_custom(blocks, cut=True, beep=False, urgent=False):
+    """Structured, printable Unicode blocks; no caller-supplied ESC/POS bytes."""
+    if not isinstance(blocks, list) or not 1 <= len(blocks) <= 80:
+        raise ValueError("Provide 1-80 blocks")
+    images = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            raise ValueError("Each block must be an object")
+        kind = block.get("type", "text")
+        if kind == "text":
+            text = block.get("text", "")
+            if not isinstance(text, str) or not 1 <= len(text) <= 3000:
+                raise ValueError("Text blocks require 1-3000 characters")
+            images.append(render_text(text))
+        elif kind == "divider":
+            image = Image.new("L", (width(), 24), 255)
+            ImageDraw.Draw(image).line((10, 12, width()-10, 12), fill=0, width=2)
+            images.append(image)
+        elif kind == "qr":
+            images.append(render_qr(block.get("data", ""), int(block.get("size", 5))))
+        elif kind == "heading":
+            title = block.get("text", "")
+            if not isinstance(title, str) or not 1 <= len(title) <= 55:
+                raise ValueError("Heading must contain 1-55 characters")
+            images.append(render_banner(title))
+        else:
+            raise ValueError("Unsupported block type")
+    if urgent:
+        images.insert(0, render_banner("SÜRGŐS"))
+    return print_image(stack_images(images), cut, beep or urgent)
