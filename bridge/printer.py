@@ -162,7 +162,7 @@ def print_appointment(customer, starts_at, service, notes="", reference="", cut=
             lines.extend(["--------------------------", f"Belső megjegyzés: {notes}"])
         lines.append("TECHNIKUS PÉLDÁNY")
     else:
-        lines.extend(["--------------------------", "ÜGYFÉL PÉLDÁNY"])
+        lines.extend([f"Ügyfél: {customer}", "--------------------------", "ÜGYFÉL PÉLDÁNY"])
     return print_text("\n".join(lines), cut, beep)
 
 def print_custom(blocks, cut=True, beep=False, urgent=False):
