@@ -43,3 +43,13 @@ GOOGLE_CALENDAR_IDS=your_calendar_id@gmail.com,another_calendar_id@group.calenda
 Calendar IDs may be your primary email or a secondary calendar ID. Do not commit credential JSON. Docker mounts `./credentials` read-only. Restart with `docker compose up -d --build`. Visit `http://UBUNTU_IP:8088/calendar`.
 
 Google preview is **read-only** at this stage. Creating an appointment still writes to local SQLite only; Google event creation/sync comes next. The calendar feed displays event titles to anyone on the trusted LAN/VPN who can load the page. It never exposes Google tokens to browser JavaScript.
+
+## Google write-back and calendar availability
+
+The configured calendar `cellnet.kft@gmail.com` is the default write destination (or set `GOOGLE_WRITE_CALENDAR_ID` explicitly). The service account needs **Make changes to events** permission on that calendar. Google Calendar API must be enabled in its Google Cloud project.
+
+Ubuntu credentials at `/run/google/service-account.json` are bind-mounted read-only into the Docker container, with `GOOGLE_SERVICE_ACCOUNT_FILE=/run/google/service-account.json`. This must be the path visible on the **Docker host**. Existing `.env` can remain unchanged; the write calendar defaults to the first `GOOGLE_CALENDAR_IDS` entry.
+
+A new booking checks existing Google events and local bookings for overlap, then creates a Google event and stores its ID with the SQLite booking. A Google API failure aborts a new booking instead of silently saving it only in SQLite. Cancelling a synced booking deletes its Google event. Older local-only bookings remain local-only; synced events are not duplicated in the weekly view.
+
+**Known MVP limits:** no reschedule/edit UI, no background reconciliation for changes made directly in Google Calendar, no automatic recovery from network outages, no SMS. Only make bookings from one operator at a time while the MVP is being tested. Service account setup (not OAuth) requires explicit calendar sharing. Google events and private appointment details are visible on the trusted LAN/VPN.
