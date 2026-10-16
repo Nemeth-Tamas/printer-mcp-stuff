@@ -97,3 +97,6 @@ def print_appointment(appointment_id: int):
             return resp.json()
     except httpx.HTTPError:
         raise HTTPException(502, "Printer API failed") from None
+
+from .calendar_routes import router as calendar_router
+app.include_router(calendar_router)
