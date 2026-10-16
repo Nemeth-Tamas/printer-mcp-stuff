@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from .tickets import daily_schedule, reminder
+from .history import recent
 from .printer import list_printers, print_appointment as do_appointment, print_qr as do_qr, print_text as do_text
 
 mcp = FastMCP(
@@ -77,6 +78,12 @@ def print_reminder(title: str, message: str, when: str = "", priority: str = "no
     if priority not in ("normal", "urgent"):
         raise ValueError("priority must be normal or urgent")
     return {"status": "queued", "job_id": do_text(reminder(title, message, when, priority), cut, beep)}
+
+
+@mcp.tool()
+def recent_print_jobs(limit: int = 20) -> dict:
+    """List recently queued Windows print jobs (IDs/timestamps only; no private ticket contents)."""
+    return {"jobs": recent(limit)}
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
