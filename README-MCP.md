@@ -42,3 +42,24 @@ A GET in the browser will not work without the bearer header, and MCP requires a
 ## Note
 
 The original local stdio MCP adapter remains available if needed, but Echo no longer has to run it. The v0.3 network MCP implementation needs to be tested against Echo's MCP client.
+
+## v0.4 additions
+
+The **Streamable HTTP** endpoint now exposes `print_daily_schedule`, `print_reminder` and `recent_print_jobs` in addition to the original four tools. For example, Echo can call:
+
+```json
+{
+  "day": "2026-10-19",
+  "appointments": [
+    {"time": "10:00", "customer": "Kovács Péter", "service": "Laptop bevizsgálás", "notes": "Átvétel"}
+  ],
+  "cut": true,
+  "beep": false
+}
+```
+
+The daily schedule is **supplied to the MCP tool by Echo**; it doesn't fetch Google Calendar itself. The reminder tool accepts `title`, `message`, optional `when`, and `priority` (`normal` or `urgent`). `recent_print_jobs` returns job timestamps and Windows spooler IDs, not customer details and not confirmation of physical printing.
+
+The REST API also has `POST /print/schedule`, `POST /print/reminder`, and `GET /jobs?limit=20` using the same Bearer token. A local SQLite file stores at most 500 recent print submissions; no message content is retained. The DB is gitignored.
+
+**Updating the Windows host:** stop both uvicorn processes, run `git pull`, then relaunch `start-api.ps1` and `start-mcp.ps1`. Echo should refresh its tool list after reconnecting. These features are code-complete but need live printer verification.
