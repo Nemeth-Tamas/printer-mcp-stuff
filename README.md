@@ -1,46 +1,57 @@
 # Echo Birch Print Bridge
 
-Windows print bridge for the **Birch CP-Q1UN** thermal printer. Includes an authenticated FastAPI HTTP endpoint for the future Ubuntu/Docker booking application and an MCP **stdio** adapter for Echo.
+Windows print bridge for the **Birch CP-Q1UN**, used by Echo (MCP) and future Cellnet Booking (REST).
 
-## Install on Echo's Windows machine
+**v0.2.0:** text, QR codes, appointment tickets, adjustable bottom feed; tested on hardware in v0.1.0 for printing, cutter, and beeper. New v0.2.0 functionality has not yet been tested on hardware.
 
-Install Python 3.11+ and the Windows Birch driver, and confirm a Windows test page prints.
+## Windows setup
+
+Install Python 3.11+, Birch printer driver, then:
 
 ```powershell
 git clone https://github.com/Nemeth-Tamas/printer-mcp-stuff.git
 cd printer-mcp-stuff
-Get-Printer | Select-Object Name
 Copy-Item .env.example .env
 notepad .env
-```
-
-In `.env`, set `PRINTER_NAME` to the exact Windows printer queue name and `PRINT_API_TOKEN` to a long random token. Keep the file local; it is gitignored.
-
-```powershell
 powershell -ExecutionPolicy Bypass -File .\start-api.ps1
 ```
 
-Test locally via `http://127.0.0.1:8765/health`. For the Ubuntu machine to connect, set `PRINT_BIND=0.0.0.0` and create a Windows Firewall rule restricted to the Ubuntu machine's IP for TCP 8765. Never expose this API to the public Internet.
+On an existing install, stop the server with Ctrl+C, then `git pull` and restart. Existing `.env` is not overwritten; add `PRINT_BOTTOM_FEED_LINES=4` (or change to 5 if needed). The default is four lines even if omitted.
+
+Use `PRINTER_NAME=CP-Q1UN` (the local Windows queue, not the redirected RDP printer). Set a unique 32-byte random token for `PRINT_API_TOKEN`. Keep the token private and exclude `.env` from Git.
 
 ## HTTP API
 
-- `GET /health` — basic liveness (no authentication)
-- `GET /printers` — installed Windows queues (Bearer token)
-- `POST /print/text` — JSON `{"text":"Árvíztűrő tükörfúrógép","cut":true,"beep":false}` (Bearer token)
+`GET /health` is unauthenticated. Every other endpoint requires `Authorization: Bearer <token>`.
 
-PowerShell example:
+- `GET /printers`: list Windows queues.
+- `POST /print/text`: `{"text":"ÁRVÍZTŰRŐ TÜKÖRFÚRÓGÉP","cut":true,"beep":true}`
+- `POST /print/qr`: `{"data":"https://cellnet.hu","caption":"Scan me","module_size":5,"cut":true,"beep":false}`
+- `POST /print/appointment`: `{"customer":"Kovács Péter","starts_at":"2026-10-19 10:00","service":"Laptop bevizsgálás","notes":"Átvétel a műhelyben","reference":"CEL-123","cut":true,"beep":true}`
+
+All print endpoints return a Windows job ID and queued status, *not proof the physical print completed*. Date/time is a display string, not a calendar integration yet.
+
+PowerShell quick test (in project directory):
 
 ```powershell
 $token = (Get-Content .env | Where-Object { $_ -match '^PRINT_API_TOKEN=' }) -replace '^PRINT_API_TOKEN=', ''
-Invoke-RestMethod -Uri http://127.0.0.1:8765/print/text -Method Post -Headers @{Authorization="Bearer $token"} -ContentType 'application/json; charset=utf-8' -Body '{"text":"Cellnet printer test","cut":true,"beep":false}'
+$payload = '{"data":"https://github.com/Nemeth-Tamas/printer-mcp-stuff","caption":"Echo QR test","cut":true,"beep":true}'
+Invoke-RestMethod -Uri http://127.0.0.1:8765/print/qr -Method Post -Headers @{Authorization="Bearer $token"} -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($payload))
 ```
 
-## MCP (stdio)
+## Echo MCP adapter (stdio)
 
-Run `python -m bridge.mcp_server` using the **same Python environment** as the API. Echo's MCP client must launch that command and pass environment variables `PRINT_API_URL` and `PRINT_API_TOKEN`. The bridge offers `print_receipt` and `available_printers`. MCP is not exposed on the HTTP port.
+The MCP adapter is *not* an HTTP MCP server; it talks to the Windows HTTP API. It can run on Echo's own machine, including Linux, with Python and dependencies `mcp` and `httpx`. Run `python -m bridge.mcp_server` with these environment variables:
 
-## Important hardware caveat
+- `PRINT_API_URL=http://WINDOWS_WIREGUARD_IP:8765`
+- `PRINT_API_TOKEN=<same token as Windows server>`
 
-Receipt output is rendered to a 576-dot ESC/POS raster so Hungarian accents survive. This sends **RAW ESC/POS** via the Windows queue. The installed driver and printer must allow RAW pass-through. A Windows test page alone does not verify RAW command support. Cutter and beeper commands are tentative until tested on your specific CP-Q1UN firmware. Printing a job means it was queued, not that paper definitely emerged.
+Configure Echo's MCP client to launch the Python module using the full Python executable path and the repository as working directory. MCP tools: `print_receipt`, `print_qr_code`, `print_appointment`, `available_printers`.
 
-No secrets are committed. Keep the listener on localhost until ready for LAN testing.
+## Networking and security
+
+Set `PRINT_BIND=0.0.0.0` only when remote clients need access. This binds every reachable interface, **not just WireGuard**. In particular, the API is unencrypted HTTP (bearer tokens travel in HTTP headers), so only use it over trusted LAN or an encrypted WireGuard tunnel, and limit inbound reachability on the host or upstream network. Do not port-forward TCP 8765 to the public internet. An exposed print endpoint permits arbitrary receipt printing by token holders.
+
+## Hardware notes
+
+UTF-8 text is rendered to a 576-dot-wide raster before sending RAW ESC/POS via the Windows spooler. Cutter `GS V` and beeper `ESC B` worked on the user's CP-Q1UN in v0.1.0. Images and QR codes require v0.2.0 hardware verification. For QR print size problems, reduce `module_size`. Configurable bottom paper feed: `PRINT_BOTTOM_FEED_LINES` 0–12.
