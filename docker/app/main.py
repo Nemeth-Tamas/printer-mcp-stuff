@@ -59,9 +59,46 @@ def home():
     return (ROOT / "index.html").read_text(encoding="utf-8")
 
 @app.get("/api/appointments")
-def list_appointments():
+def list_appointments(view: str = "upcoming", search: str = ""):
+    if view not in ("upcoming", "past", "cancelled", "all"):
+        raise HTTPException(400, "Invalid view")
+    if len(search) > 120:
+        raise HTTPException(400, "Search too long")
+    now = datetime.now(TZ).isoformat()
+    where = []
+    params = []
+    if view == "upcoming":
+        where.extend(["status='booked'", "starts_at>=?"])
+        params.append(now)
+    elif view == "past":
+        where.extend(["status='booked'", "starts_at<?"])
+        params.append(now)
+    elif view == "cancelled":
+        where.append("status='cancelled'")
+    if search.strip():
+        where.append("(customer LIKE ? OR phone LIKE ? OR service LIKE ?)")
+        term = "%" + search.strip() + "%"
+        params.extend([term] * 3)
+    condition = " WHERE " + " AND ".join(where) if where else ""
+    direction = "ASC" if view == "upcoming" else "DESC"
+    sql = "SELECT * FROM appointments" + condition + " ORDER BY starts_at " + direction + " LIMIT 250"
     with database() as db:
-        return [dict(row) for row in db.execute("SELECT * FROM appointments ORDER BY starts_at DESC LIMIT 250")]
+        return [dict(row) for row in db.execute(sql, params)]
+
+@app.get("/api/customers")
+def customers(search: str = ""):
+    if len(search) < 2:
+        return []
+    if len(search) > 120:
+        raise HTTPException(400, "Search too long")
+    pattern = "%" + search.strip() + "%"
+    with database() as db:
+        rows = db.execute("""
+            SELECT customer, phone, COUNT(*) AS visits, MAX(starts_at) AS last_booking
+            FROM appointments WHERE customer LIKE ? OR phone LIKE ?
+            GROUP BY customer, phone ORDER BY last_booking DESC LIMIT 15
+        """, (pattern, pattern)).fetchall()
+        return [dict(row) for row in rows]
 
 @app.post("/api/appointments", status_code=201)
 def create_appointment(req: AppointmentIn):
