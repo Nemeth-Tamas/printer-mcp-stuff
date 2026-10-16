@@ -7,7 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
-from .google_feed import create_event, delete_event, fetch_events
+from .google_feed import create_event, delete_event, fetch_events, update_event, write_calendar
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -136,6 +136,45 @@ def print_appointment(appointment_id: int):
             return resp.json()
     except httpx.HTTPError:
         raise HTTPException(502, "Printer API failed") from None
+
+
+@app.put("/api/appointments/{appointment_id}")
+def edit_appointment(appointment_id: int, req: AppointmentIn):
+    when = validate_time(req.starts_at)
+    start = datetime.fromisoformat(when)
+    finish = start + timedelta(minutes=req.duration_minutes)
+    with database() as db:
+        original = db.execute("SELECT * FROM appointments WHERE id=? AND status='booked'", (appointment_id,)).fetchone()
+        if original is None:
+            raise HTTPException(404, "Active appointment not found")
+        if not original["google_event_id"]:
+            raise HTTPException(409, "Legacy local booking cannot be edited yet")
+        others = db.execute("SELECT id, starts_at, duration_minutes FROM appointments WHERE status='booked' AND id<>?", (appointment_id,)).fetchall()
+        for other in others:
+            other_start = datetime.fromisoformat(other["starts_at"])
+            if other_start < finish and other_start + timedelta(minutes=other["duration_minutes"]) > start:
+                raise HTTPException(409, "Az időpont ütközik egy helyi foglalással")
+        try:
+            google, connected = fetch_events(start - timedelta(days=1), finish + timedelta(days=1))
+            if not connected:
+                raise RuntimeError("Google calendar not configured")
+            from datetime import date, time
+            for event in google:
+                if event.get("id") == original["google_event_id"] and event.get("calendar") == __import__("app.google_feed", fromlist=["write_calendar"]).write_calendar():
+                    continue
+                begin = datetime.fromisoformat(event["start"]) if not event["allDay"] else datetime.combine(date.fromisoformat(event["start"]), time.min, tzinfo=TZ)
+                end = datetime.fromisoformat(event["end"]) if not event["allDay"] else datetime.combine(date.fromisoformat(event["end"]), time.min, tzinfo=TZ)
+                if begin < finish and end > start:
+                    raise HTTPException(409, "Az időpont ütközik egy Google Calendar eseménnyel")
+            update_event(original["google_event_id"], appointment_id, req.customer, req.phone,
+                         req.service, when, req.duration_minutes, req.notes)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(502, "Google Calendar update failed: " + str(exc)[:180]) from None
+        db.execute("UPDATE appointments SET customer=?, phone=?, service=?, starts_at=?, duration_minutes=?, notes=? WHERE id=?",
+                   (req.customer, req.phone, req.service, when, req.duration_minutes, req.notes, appointment_id))
+        return {"id": appointment_id, "status": "booked", "google_event_id": original["google_event_id"]}
 
 from .calendar_routes import router as calendar_router
 app.include_router(calendar_router)
