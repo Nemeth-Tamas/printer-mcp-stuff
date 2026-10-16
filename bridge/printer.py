@@ -179,7 +179,7 @@ def print_appointment(customer, starts_at, service, notes="", reference="", cut=
         lines.extend(["--------------------------", "Köszönjük a foglalását!",
                       "Várjuk szeretettel!", "--------------------------",
                       "ÜGYFÉL PÉLDÁNY"])
-    return print_text("\\n".join(lines), cut, beep)
+    return print_text("\n".join(lines), cut, beep)
 
 def print_custom(blocks, cut=True, beep=False, urgent=False):
     """Structured, printable Unicode blocks; no caller-supplied ESC/POS bytes."""
