@@ -127,8 +127,22 @@ def print_image(image, cut=True, beep=False):
         finally:
             win32print.ClosePrinter(handle)
 
-def print_text(text, cut=True, beep=False):
+def print_text(text, cut=True, beep=False, urgent=False):
+    if urgent:
+        beep = True
+        header = render_banner("SÜRGŐS!  FONTOS ÉRTESÍTÉS")
+        return print_image(stack_images([header, render_text(text)]), cut, beep)
     return print_image(render_text(text), cut, beep)
+
+def render_banner(title):
+    w = width()
+    img = Image.new("L", (w, 95), 255)
+    d = ImageDraw.Draw(img)
+    d.rectangle((3, 3, w - 4, 90), outline=0, width=5)
+    font = _font()
+    bbox = d.textbbox((0, 0), title, font=font)
+    d.text(((w - (bbox[2] - bbox[0])) // 2, 28), title, font=font, fill=0)
+    return img
 
 def print_qr(data, caption="", size=5, cut=True, beep=False):
     images = [render_text(caption)] if caption else []
@@ -136,11 +150,11 @@ def print_qr(data, caption="", size=5, cut=True, beep=False):
     return print_image(stack_images(images), cut, beep)
 
 def print_appointment(customer, starts_at, service, notes="", reference="", cut=True, beep=True):
-    lines = ["CELLNET KFT.", "IDOPONT FOGLALAS", "--------------------------",
-             f"Idopont: {starts_at}", f"Ugyfel: {customer}", f"Szolgaltatas: {service}"]
+    lines = ["CELLNET KFT.", "IDŐPONTFOGLALÁS", "--------------------------",
+             f"Időpont: {starts_at}", f"Ügyfél: {customer}", f"Szolgáltatás: {service}"]
     if reference:
-        lines.append(f"Azonosito: {reference}")
+        lines.append(f"Azonosító: {reference}")
     if notes:
-        lines.extend(["--------------------------", f"Megjegyzes: {notes}"])
-    lines.extend(["--------------------------", "Varjuk szeretettel!"])
+        lines.extend(["--------------------------", f"Megjegyzés: {notes}"])
+    lines.extend(["--------------------------", "Várjuk szeretettel!"])
     return print_text("\n".join(lines), cut, beep)
