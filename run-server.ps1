@@ -13,5 +13,5 @@ if (!$env:PRINT_API_TOKEN -or $env:PRINT_API_TOKEN -eq 'REPLACE_WITH_A_LONG_RAND
 if (!$env:PRINTER_NAME) { throw 'Missing PRINTER_NAME' }
 $hostAddress = if ($env:PRINT_BIND) { $env:PRINT_BIND } else { '127.0.0.1' }
 $target = if ($Mode -eq 'api') { 'bridge.api:app' } else { 'bridge.mcp_http:app' }
-$port = if ($Mode -eq 'api') { 8765 } else { 8766 }
+$port = if ($Mode -eq 'api') { 9005 } else { 9006 }
 & $python -m uvicorn $target --host $hostAddress --port $port
