@@ -3,7 +3,7 @@ import os
 import secrets
 from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel, Field
-from .printer import print_text, print_qr, print_appointment, list_printers
+from .printer import print_text, print_qr, print_appointment, print_custom, list_printers
 from .tickets import daily_schedule, reminder
 from .history import recent
 
@@ -37,6 +37,8 @@ class AppointmentRequest(BaseModel):
     reference: str = Field(default="", max_length=100)
     cut: bool = True
     beep: bool = True
+    mode: str = Field(default="customer", pattern="^(customer|technician)$")
+    phone: str = Field(default="", max_length=40)
 
 def submit(fn, *args, **kwargs):
     try:
@@ -69,7 +71,7 @@ def print_qrcode(req: QRRequest):
 @app.post("/print/appointment", dependencies=[Depends(authorize)])
 def appointment(req: AppointmentRequest):
     return submit(print_appointment, req.customer, req.starts_at, req.service,
-                  notes=req.notes, reference=req.reference, cut=req.cut, beep=req.beep)
+                  notes=req.notes, reference=req.reference, cut=req.cut, beep=req.beep, mode=req.mode, phone=req.phone)
 
 class ScheduleItem(BaseModel):
     time: str = Field(min_length=1, max_length=30)
@@ -104,3 +106,13 @@ def reminder_receipt(req: ReminderRequest):
 @app.get("/jobs", dependencies=[Depends(authorize)])
 def jobs(limit: int = 20):
     return {"jobs": recent(limit)}
+
+class CustomRequest(BaseModel):
+    blocks: list[dict] = Field(min_length=1, max_length=80)
+    cut: bool = True
+    beep: bool = False
+    urgent: bool = False
+
+@app.post("/print/custom", dependencies=[Depends(authorize)])
+def custom_receipt(req: CustomRequest):
+    return submit(print_custom, req.blocks, cut=req.cut, beep=req.beep, urgent=req.urgent)
